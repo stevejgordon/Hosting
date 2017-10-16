@@ -25,6 +25,7 @@ namespace Microsoft.AspNetCore.TestHost
     {
         private readonly IHttpApplication<Context> _application;
         private readonly PathString _pathBase;
+        private readonly Uri _baseAddress;
 
         /// <summary>
         /// Create a new handler.
@@ -32,6 +33,15 @@ namespace Microsoft.AspNetCore.TestHost
         /// <param name="pathBase">The base path.</param>
         /// <param name="application">The <see cref="IHttpApplication{TContext}"/>.</param>
         public ClientHandler(PathString pathBase, IHttpApplication<Context> application)
+            : this(pathBase, application, new Uri("127.0.0.1:80")) { }
+
+        /// <summary>
+        /// Create a new handler.
+        /// </summary>
+        /// <param name="pathBase">The base path.</param>
+        /// <param name="application">The <see cref="IHttpApplication{TContext}"/>.</param>
+        /// <param name="baseAddress"></param>
+        public ClientHandler(PathString pathBase, IHttpApplication<Context> application, Uri baseAddress)
         {
             if (application == null)
             {
@@ -46,6 +56,7 @@ namespace Microsoft.AspNetCore.TestHost
                 pathBase = new PathString(pathBase.Value.Substring(0, pathBase.Value.Length - 1));
             }
             _pathBase = pathBase;
+            _baseAddress = baseAddress;
         }
 
         /// <summary>
@@ -64,7 +75,7 @@ namespace Microsoft.AspNetCore.TestHost
                 throw new ArgumentNullException(nameof(request));
             }
 
-            var state = new RequestState(request, _pathBase, _application);
+            var state = new RequestState(request, _pathBase, _application, _baseAddress);
             var requestContent = request.Content ?? new StreamContent(Stream.Null);
             var body = await requestContent.ReadAsStreamAsync();
             if (body.CanSeek)
@@ -108,7 +119,7 @@ namespace Microsoft.AspNetCore.TestHost
             private CancellationTokenSource _requestAbortedSource;
             private bool _pipelineFinished;
 
-            internal RequestState(HttpRequestMessage request, PathString pathBase, IHttpApplication<Context> application)
+            internal RequestState(HttpRequestMessage request, PathString pathBase, IHttpApplication<Context> application, Uri baseAddress)
             {
                 _request = request;
                 _application = application;
@@ -132,6 +143,8 @@ namespace Microsoft.AspNetCore.TestHost
                 contextFeatures.Set<IHttpResponseFeature>(_responseFeature);
                 var requestLifetimeFeature = new HttpRequestLifetimeFeature();
                 contextFeatures.Set<IHttpRequestLifetimeFeature>(requestLifetimeFeature);
+                var connectionFeature = new HttpConnectionFeature();
+                contextFeatures.Set<IHttpConnectionFeature>(connectionFeature);
 
                 requestFeature.Protocol = "HTTP/" + request.Version.ToString(fieldCount: 2);
                 requestFeature.Scheme = request.RequestUri.Scheme;
@@ -169,6 +182,11 @@ namespace Microsoft.AspNetCore.TestHost
                 _responseFeature.Body = _responseStream;
                 _responseFeature.StatusCode = 200;
                 requestLifetimeFeature.RequestAborted = _requestAbortedSource.Token;
+
+                connectionFeature.LocalPort = baseAddress.Port;
+                connectionFeature.LocalIpAddress = new IPAddress("127.0.0.1");
+                connectionFeature.RemotePort = baseAddress.Port;
+                connectionFeature.RemoteIpAddress = new IPAddress("127.0.0.1");
 
                 Context = application.CreateContext(contextFeatures);
             }

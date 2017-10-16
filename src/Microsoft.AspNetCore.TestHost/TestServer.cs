@@ -37,13 +37,12 @@ namespace Microsoft.AspNetCore.TestHost
             }        
         
             Features = featureCollection;
-
             var host = builder.UseServer(this).Build();
             host.StartAsync().GetAwaiter().GetResult();
             _hostInstance = host;
         }
 
-        public Uri BaseAddress { get; set; } = new Uri("http://127.0.0.1:80/");
+        public Uri BaseAddress { get; set; };
 
         public IWebHost Host
         {
